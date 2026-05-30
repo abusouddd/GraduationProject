@@ -1,537 +1,550 @@
-# Smart Glasses AI
+# Navigate Eye
 
-**AI-Powered Smart Glasses for Visually Impaired Users**
+**AI Vision Assist for Visually Impaired People**
 
-> Detects traffic lights (red/yellow/green), crosswalks, doors, persons, cars, stairs, and obstacles in real-time, providing smart audio alerts for safe daily navigation.
+Navigate Eye is a capstone project that uses real-time computer vision and audio guidance to support visually impaired users during indoor and outdoor navigation. The system captures live video through a camera, detects important objects using a trained YOLOv8n model, then converts the detection result into spoken alerts through a connected speaker.
 
-**Team:** Abdullah Hourani, Nour AbuAlsoud, Omar Almonayer
-**Supervisor:** Dr. Malik Louzi
-**Course:** Bachelor of Science in Cyber Security — Capstone Project
+The system is designed to run locally on a Raspberry Pi 4 with limited hardware resources. It does not depend on an internet connection during detection, which makes it more private, portable, and suitable for real-world use.
+
+---
+
+## Project Information
+
+| Item | Details |
+|---|---|
+| Project Name | Navigate Eye |
+| Project Type | Bachelor of Computer Science Capstone Project |
+| Main Goal | Assist visually impaired users using AI object detection and audio alerts |
+| Team Members | Abdullah Hourani, Nour AbuAlsoud, Omar Almonayer |
+| Supervisor | Dr. Malik Louzi |
+| Main Model | YOLOv8n |
+| Deployment Device | Raspberry Pi 4 |
+| Main Language | Python |
 
 ---
 
 ## Table of Contents
 
-- [What Makes This Special](#what-makes-this-special)
+- [Project Overview](#project-overview)
+- [Main Features](#main-features)
 - [Detection Classes](#detection-classes)
-- [Project Structure](#project-structure)
-- [How to Set Up](#how-to-set-up)
-- [Step 1: Prepare Your Dataset](#step-1-prepare-your-dataset)
-- [Step 2: Train the Model](#step-2-train-the-model)
-- [Step 3: Evaluate the Model](#step-3-evaluate-the-model)
-- [Step 4: Test Detection (Desktop)](#step-4-test-detection-desktop)
-- [Step 5: Deploy on Raspberry Pi](#step-5-deploy-on-raspberry-pi)
-- [Priority & Anti-Spam System](#priority--anti-spam-system)
-- [Configuration](#configuration)
+- [System Workflow](#system-workflow)
+- [Hardware Components](#hardware-components)
+- [Software and Tools](#software-and-tools)
+- [Current Project Structure](#current-project-structure)
+- [How to Run the Project](#how-to-run-the-project)
+- [Run on Raspberry Pi](#run-on-raspberry-pi)
+- [Run with a USB Camera](#run-with-a-usb-camera)
+- [Run on a Video File](#run-on-a-video-file)
+- [Alert Logic](#alert-logic)
+- [English and Arabic Audio](#english-and-arabic-audio)
+- [Model and Dataset Notes](#model-and-dataset-notes)
+- [Performance and Results](#performance-and-results)
+- [Known Limitations](#known-limitations)
 - [Troubleshooting](#troubleshooting)
 
 ---
 
-## What Makes This Special
+## Project Overview
 
-This is NOT just another obstacle detector. These smart glasses provide **full daily navigation support** in both outdoor and indoor environments:
+Navigate Eye is a wearable assistive system. A camera captures the surrounding environment and sends frames to the Raspberry Pi. The trained YOLOv8n model detects important navigation objects such as traffic lights, crosswalks, doors, cars, people, stairs, and obstacles.
 
-- **Outdoor Navigation**: Detects **crosswalks** and **traffic lights** (red, yellow, green) to help users cross streets safely.
-- **Indoor Navigation**: Detects **doors** (opened/closed) and **cabinets** to help users navigate inside buildings.
-- **General Safety**: Detects **people**, **cars**, **stairs**, and **obstacles**.
-- **Smart Alerts**: Does NOT spam alerts — uses a priority system to speak only what matters most.
-- **Raspberry Pi Ready**: Optimized to run on Raspberry Pi 4/5 with ONNX runtime.
+After detection, the system checks the object priority, distance, position, confidence score, and alert cooldown. Then it speaks the most important alert to the user.
+
+Example alerts:
+
+- `Stop! Red light!`
+- `Car ahead. Careful.`
+- `Stairs ahead. Watch your step.`
+- `Crosswalk ahead.`
+- `Door ahead.`
+
+---
+
+## Main Features
+
+- Real-time object detection using YOLOv8n.
+- Raspberry Pi 4 support.
+- USB camera support.
+- Raspberry Pi CSI camera support through `picamera2` when available.
+- English and Arabic voice alerts.
+- Priority-based alert system.
+- Anti-spam cooldown system to avoid repeated audio.
+- Temporal validation to reduce false detections.
+- Distance estimation using bounding box size.
+- Object position guidance: left, center, or right.
+- Video-file testing and output video generation.
+- Offline text-to-speech using `pyttsx3` and `espeak`.
 
 ---
 
 ## Detection Classes
 
-| Class ID | Class Name | Category | Priority |
-|----------|-----------|----------|----------|
-| 0 | `traffic_light_red` | Outdoor | CRITICAL (1) |
-| 1 | `traffic_light_yellow` | Outdoor | HIGH (2) |
-| 2 | `traffic_light_green` | Outdoor | SAFE (5) |
-| 3 | `crosswalk` | Outdoor | MEDIUM (3) |
-| 4 | `door` | Indoor | MEDIUM (3) |
-| 5 | `person` | General | MEDIUM (3) |
-| 6 | `car` | General | HIGH (2) |
-| 7 | `stairs` | General | HIGH (2) |
-| 8 | `obstacle` | General | LOW (4) |
+The trained model uses 9 classes. The order must not be changed because it matches `data.yaml` and the trained model weights.
+
+| Class ID | Class Name | Purpose | Alert Importance |
+|---:|---|---|---|
+| 0 | `traffic_light_red` | Warns the user to stop | Critical |
+| 1 | `traffic_light_yellow` | Warns the user to be careful | High |
+| 2 | `traffic_light_green` | Gives safe-crossing awareness | Information |
+| 3 | `crosswalk` | Helps with road crossing navigation | Information |
+| 4 | `door` | Supports indoor navigation | Information |
+| 5 | `person` | Warns about nearby people | Warning |
+| 6 | `car` | Warns about traffic danger | Critical |
+| 7 | `stairs` | Helps prevent falls | Critical |
+| 8 | `obstacle` | Warns about general hazards | Warning |
 
 ---
 
-## Project Structure
+## System Workflow
 
-```
-smart-glasses-ai/
-├── data.yaml                    # Dataset configuration (YOLO format)
-├── prepare_dataset.py           # Splits your raw data into train/val/test
-├── train.py                     # Training script
-├── train.sh                     # Training launch script
-├── detect.py                    # Detection entry point (desktop/laptop)
-├── run_pi.py                    # Raspberry Pi optimized runner
-├── evaluate.py                  # Model evaluation script
-├── export_model.py              # Export model to ONNX/NCNN/TFLite
-├── requirements.txt             # Python dependencies
-├── README.md                    # This file
-├── .gitignore                   # Git ignore rules
-│
+The active detection pipeline works as follows:
+
+1. The camera captures a frame.
+2. YOLOv8n detects objects in the frame.
+3. Low-confidence detections are filtered.
+4. Extra class-specific filters are applied.
+5. Non-Maximum Suppression removes duplicate boxes.
+6. The history buffer checks if the object appears across frames.
+7. The system estimates object distance and position.
+8. The alert logic chooses the most important warning.
+9. The audio engine speaks the alert in English or Arabic.
+
+This workflow helps the system avoid noisy alerts and focus on useful guidance.
+
+---
+
+## Hardware Components
+
+| Component | Purpose |
+|---|---|
+| Raspberry Pi 4 | Main processing device |
+| USB Camera / Pi Camera | Captures real-time video |
+| Speaker | Plays audio alerts |
+| SD Card | Stores operating system, code, and model weights |
+| Power Supply / Power Bank | Powers the Raspberry Pi |
+
+---
+
+## Software and Tools
+
+| Tool | Purpose |
+|---|---|
+| Python | Main programming language |
+| OpenCV | Camera access, frame processing, and drawing detections |
+| Ultralytics YOLO | Object detection framework |
+| YOLOv8n | Lightweight model suitable for embedded devices |
+| PyTorch | Model execution backend |
+| pyttsx3 | Offline text-to-speech in Python |
+| espeak / espeak-ng | Speech synthesis backend on Raspberry Pi |
+| ONNX / ONNX Runtime | Optional optimization path for faster inference |
+| Roboflow | Dataset labeling and dataset management |
+
+---
+
+## Current Project Structure
+
+This README is written to match the actual files in this repository.
+
+```text
+GradProj/
+├── README.md
+├── data.yaml
+├── install_pi.sh
+├── requirements-pi.txt
+├── run_usb.py
+├── run_video.py
 ├── configs/
-│   └── model_config.yaml        # All configuration settings
-│
-├── src/
-│   ├── __init__.py
-│   ├── detector.py              # Main detection engine
-│   ├── priority_manager.py      # Smart priority & anti-spam system
-│   ├── audio_alerts.py          # Text-to-speech alerts (offline)
-│   └── camera.py                # Threaded camera capture
-│
-├── models/                      # Exported models go here
-│
-└── datasets/
-    ├── raw/                     # PUT YOUR DATA HERE
-    │   ├── images/              # All your images (.jpg, .png)
-    │   └── labels/              # All your labels (.txt)
-    └── processed/               # Auto-generated by prepare_dataset.py
-        ├── train/
-        │   ├── images/
-        │   └── labels/
-        ├── val/
-        │   ├── images/
-        │   └── labels/
-        └── test/
-            ├── images/
-            └── labels/
+│   └── model_config.yaml
+├── runs/
+│   └── detect/
+│       └── smart_glass/
+│           ├── args.yaml
+│           ├── labels.jpg
+│           ├── results.csv
+│           └── weights/
+│               ├── best.pt
+│               └── last.pt
+└── src/
+    ├── audio_alerts.py
+    └── detect.py
 ```
+
+### Important files
+
+| File | Description |
+|---|---|
+| `src/detect.py` | Main live detection program |
+| `src/audio_alerts.py` | Audio alert engine |
+| `run_usb.py` | Helper script for USB camera use |
+| `run_video.py` | Runs detection on a video file and saves the output |
+| `data.yaml` | Dataset class configuration |
+| `configs/model_config.yaml` | Reference configuration for model, detection, priority, audio, and camera settings |
+| `runs/detect/smart_glass/weights/best.pt` | Best trained YOLO model |
+| `runs/detect/smart_glass/weights/last.pt` | Last training checkpoint |
+| `install_pi.sh` | Raspberry Pi setup script |
+| `requirements-pi.txt` | Python dependencies for Raspberry Pi |
 
 ---
 
-## How to Set Up
+## How to Run the Project
 
-### 1. Install Python 3.9+ (if not already installed)
-
-### 2. Create a virtual environment (recommended)
+### 1. Go to the project folder
 
 ```bash
-cd smart-glasses-ai
-python -m venv venv
+cd GradProj
+```
 
-# Windows
-venv\Scripts\activate
-# macOS / Linux
+### 2. Create and activate a virtual environment
+
+```bash
+python3 -m venv venv
 source venv/bin/activate
+```
+
+On Windows PowerShell:
+
+```powershell
+python -m venv venv
+venv\Scripts\Activate.ps1
 ```
 
 ### 3. Install dependencies
 
+For Raspberry Pi, use:
+
 ```bash
-pip install -r requirements.txt
+pip install -r requirements-pi.txt
+```
+
+For desktop testing, these packages are usually enough:
+
+```bash
+pip install ultralytics opencv-python pyttsx3 pyyaml numpy torch torchvision
+```
+
+### 4. Check that the trained model exists
+
+The default model path is:
+
+```text
+runs/detect/smart_glass/weights/best.pt
+```
+
+The project will not run if this file is missing.
+
+---
+
+## Run on Raspberry Pi
+
+The project includes a setup script for Raspberry Pi.
+
+```bash
+bash install_pi.sh
+```
+
+After installation, activate the environment:
+
+```bash
+source venv/bin/activate
+```
+
+Run with display:
+
+```bash
+python3 src/detect.py --device pi --language en
+```
+
+Run headless through SSH:
+
+```bash
+python3 src/detect.py --device pi --no-display --language en
+```
+
+Run with Arabic audio:
+
+```bash
+python3 src/detect.py --device pi --no-display --language ar
+```
+
+Use a custom model path:
+
+```bash
+python3 src/detect.py --device pi --model runs/detect/smart_glass/weights/best.pt --language en
 ```
 
 ---
 
-## Step 1: Prepare Your Dataset
+## Run with a USB Camera
 
-### Where to put your images and labels
-
-Put ALL your images and labels in the `datasets/raw/` folder:
-
-```
-datasets/raw/
-├── images/          <-- Put ALL your images here (.jpg, .png)
-└── labels/          <-- Put ALL your label files here (.txt)
-```
-
-**Important:** Each label file must have the **same name** as its image.
-
-For example:
-```
-datasets/raw/
-├── images/
-│   ├── img_001.jpg
-│   ├── img_002.jpg
-│   └── img_003.png
-└── labels/
-    ├── img_001.txt     <-- matches img_001.jpg
-    ├── img_002.txt     <-- matches img_002.jpg
-    └── img_003.txt     <-- matches img_003.png
-```
-
-### Label Format (YOLO)
-
-Each line in the label file represents one object:
-```
-class_id  center_x  center_y  width  height
-```
-
-All values must be **normalized between 0.0 and 1.0**.
-
-**Example** — an image with a red traffic light and a person:
-```
-0 0.75 0.30 0.10 0.20
-5 0.40 0.55 0.15 0.40
-```
-
-**Class IDs:**
-```
-0 = traffic_light_red
-1 = traffic_light_yellow
-2 = traffic_light_green
-3 = crosswalk
-4 = door
-5 = person
-6 = car
-7 = stairs
-8 = obstacle
-```
-
-### Split your dataset into train/val/test
-
-Once all your images and labels are in `datasets/raw/`, run:
+Use the helper script:
 
 ```bash
-# Default: 70% train, 20% val, 10% test
-python prepare_dataset.py
-
-# Custom ratios
-python prepare_dataset.py --train 0.8 --val 0.1 --test 0.1
-
-# Check status before splitting
-python prepare_dataset.py --status
+python3 run_usb.py --language en
 ```
 
-This will automatically create:
-```
-datasets/processed/
-├── train/images/  + labels/   (70%)
-├── val/images/    + labels/   (20%)
-└── test/images/   + labels/   (10%)
-```
-
-### Verify your dataset
+Headless mode:
 
 ```bash
-python prepare_dataset.py --verify
+python3 run_usb.py --language en --no-display
 ```
 
-### View dataset statistics
+Arabic mode:
 
 ```bash
-python prepare_dataset.py --stats
+python3 run_usb.py --language ar --no-display
+```
+
+You can also run the main script directly:
+
+```bash
+python3 src/detect.py --source 0 --device pi --language en
+```
+
+Try another camera index if needed:
+
+```bash
+python3 src/detect.py --source 1 --device pi --language en
 ```
 
 ---
 
-## Step 2: Train the Model
+## Run on a Video File
 
-### Quick start (recommended)
-
-```bash
-bash train.sh
-```
-
-### Custom training
+Use this when testing the model on a recorded video.
 
 ```bash
-# Default training
-python train.py
-
-# Custom epochs and batch size
-python train.py --epochs 300 --batch 8
-
-# Train on CPU (slower)
-python train.py --device cpu
-
-# Resume from checkpoint
-python train.py --resume
-
-# Use specific model weights
-python train.py --model yolov8n.pt
+python3 run_video.py --source input.mp4 --output output_detected.mp4 --language en
 ```
 
-### What happens during training
+Use a custom model:
 
-- Downloads YOLOv8n pretrained weights automatically
-- Trains on your dataset in `datasets/processed/`
-- Saves results to `runs/detect/train/`
-- Best model: `runs/detect/train/weights/best.pt`
-- Last model: `runs/detect/train/weights/last.pt`
-- Training curves: `runs/detect/train/results.png`
+```bash
+python3 run_video.py --source input.mp4 --output output_detected.mp4 --model runs/detect/smart_glass/weights/best.pt --language en
+```
 
-### Training tips for best results
-
-1. **More images = better model** — Aim for at least 1000+ images per class
-2. **Balance your classes** — Try to have roughly equal images for each class
-3. **Diverse backgrounds** — Include images from different times, angles, lighting
-4. **200-300 epochs** — Use enough epochs but don't overtrain
-5. **Use GPU if available** — Training is 10-50x faster on GPU
+The output video will include bounding boxes and FPS information.
 
 ---
 
-## Step 3: Evaluate the Model
+## Alert Logic
 
-```bash
-# Evaluate on test set
-python evaluate.py
+The system does not speak every detection. It uses filtering and priority logic first.
 
-# Evaluate on validation set
-python evaluate.py --split val
+### Detection filters
 
-# Custom confidence threshold
-python evaluate.py --confidence 0.5
+- Confidence threshold.
+- Class-specific threshold.
+- Object size and shape checks.
+- Non-Maximum Suppression to remove duplicate boxes.
+- Temporal history boost for objects seen across several frames.
 
-# Use CPU
-python evaluate.py --device cpu
-```
+### Frame confirmation
 
-Results are saved to `runs/detect/val/`:
-- `confusion_matrix.png`
-- `F1_curve.png`
-- `PR_curve.png`
-- `P_curve.png`
-- `R_curve.png`
+| Level | Frames Needed Before Alert |
+|---|---:|
+| Danger | 1 frame |
+| Warning | 2 frames |
+| Information | 3 frames |
 
----
+This means dangerous objects can be spoken faster, while less urgent objects need more confirmation.
 
-## Step 4: Test Detection (Desktop)
+### Cooldown system
 
-```bash
-# Run with webcam
-python detect.py
+Each class has a cooldown timer. This prevents the speaker from repeating the same alert again and again.
 
-# Run with your trained model
-python detect.py --model runs/detect/train/weights/best.pt
+| Class | Cooldown |
+|---|---:|
+| `traffic_light_red` | 4 seconds |
+| `traffic_light_yellow` | 4 seconds |
+| `traffic_light_green` | 8 seconds |
+| `crosswalk` | 12 seconds |
+| `door` | 10 seconds |
+| `person` | 6 seconds |
+| `car` | 5 seconds |
+| `stairs` | 8 seconds |
+| `obstacle` | 6 seconds |
 
-# Test with a video file
-python detect.py --source test_video.mp4
+### Distance estimation
 
-# Test with a single image
-python detect.py --source test_image.jpg
+The system estimates distance using the object bounding box height compared with the frame height.
 
-# Headless mode (no display window)
-python detect.py --no-display
+| Distance | Meaning |
+|---|---|
+| Close | Object is large in the frame and may be near the user |
+| Medium | Object is ahead but not extremely close |
+| Far | Object is too far, so no audio alert is usually spoken |
 
-# Test audio output
-python detect.py --test-audio
-```
+### Position guidance
 
-Press **q** in the detection window to quit.
+For most objects, the alert includes the object position:
 
----
+- left
+- center
+- right
 
-## Step 5: Deploy on Raspberry Pi
+Example:
 
-### Export the model for Raspberry Pi
-
-```bash
-# Export to ONNX (recommended for Pi)
-python export_model.py --format onnx --imgsz 320
-
-# Export with FP16 for smaller size
-python export_model.py --format onnx --imgsz 320 --half
-
-# Export to all formats
-python export_model.py --format all
-```
-
-Exported models are saved to `models/` directory.
-
-### Install on Raspberry Pi
-
-```bash
-# Copy the entire project to Raspberry Pi
-scp -r smart-glasses-ai/ pi@raspberrypi:~/smart-glasses-ai/
-
-# SSH into Pi
-ssh pi@raspberrypi
-
-# Navigate to project
-cd ~/smart-glasses-ai
-
-# Install dependencies
-pip install -r requirements.txt
-
-# Install ONNX runtime for ARM
-pip install onnxruntime
-
-# Install TTS
-pip install pyttsx3
-sudo apt install espeak  # Required for pyttsx3 on Pi
-```
-
-### Run on Raspberry Pi
-
-```bash
-# Run with ONNX model (recommended)
-python3 run_pi.py --model models/best.onnx
-
-# Run with original PyTorch model
-python3 run_pi.py --model models/best.pt
-
-# Run with smaller input (faster)
-python3 run_pi.py --model models/best.onnx --input-size 224
-
-# Test before running
-python3 run_pi.py --test
-```
-
-### Auto-start on boot (optional)
-
-Create a systemd service:
-
-```bash
-sudo nano /etc/systemd/system/smart-glasses.service
-```
-
-Paste this content (adjust paths):
-
-```ini
-[Unit]
-Description=Smart Glasses AI
-After=network.target
-
-[Service]
-Type=simple
-User=pi
-WorkingDirectory=/home/pi/smart-glasses-ai
-ExecStart=/usr/bin/python3 /home/pi/smart-glasses-ai/run_pi.py --model /home/pi/smart-glasses-ai/models/best.onnx
-Restart=always
-RestartSec=5
-
-[Install]
-WantedBy=multi-user.target
-```
-
-Enable and start:
-
-```bash
-sudo systemctl enable smart-glasses
-sudo systemctl start smart-glasses
+```text
+Car ahead. Careful. left
 ```
 
 ---
 
-## Priority & Anti-Spam System
+## English and Arabic Audio
 
-One of the most important features. The system uses a **smart priority system** so the user hears only what matters, when it matters.
+The project supports English and Arabic alert messages.
 
-### How it works
+English example:
 
-1. **Every detection is given a priority level** (1 = most urgent, 5 = least)
-2. **Only the highest priority alert is spoken per frame**
-3. **Each class has a cooldown timer** — won't repeat the same alert too often
-4. **Global rate limiting** — max 12 alerts per minute
-5. **Close objects get boosted** — if a critical object is very close, it's spoken immediately
+```bash
+python3 src/detect.py --device pi --language en
+```
 
-### Priority Levels
+Arabic example:
 
-| Priority | Level | Classes | Behavior |
-|----------|-------|---------|----------|
-| 1 | CRITICAL | `traffic_light_red` | Spoken immediately, 3s cooldown |
-| 2 | HIGH | `traffic_light_yellow`, `car`, `stairs` | Spoken quickly, 3-4s cooldown |
-| 3 | MEDIUM | `crosswalk`, `person`, `door` | Normal cadence, 4-5s cooldown |
-| 4 | LOW | `obstacle` | Only when nothing else matters, 6s cooldown |
-| 5 | SAFE | `traffic_light_green` | Least frequent, 6s cooldown |
+```bash
+python3 src/detect.py --device pi --language ar
+```
 
-### Distance Estimation
-
-The system estimates distance from the bounding box size:
-- **"Very close"** — Object takes up more than 3% of the image → immediate warning
-- **"Ahead"** — Object takes up 1-3% of the image → normal alert
-- **"Far"** — Object takes up less than 1% → gentle awareness
-
-### Example Alert Messages
-
-- "Red light, stop!" (traffic_light_red, very close)
-- "Car ahead." (car, ahead)
-- "Stairs ahead, watch your step." (stairs, ahead)
-- "Door right in front of you." (door, very close)
-- "Crosswalk ahead." (crosswalk, ahead)
-- "Green light ahead, safe to cross." (traffic_light_green, ahead)
+The audio system uses offline speech, so internet is not required during real-time detection.
 
 ---
 
-## Configuration
+## Model and Dataset Notes
 
-All settings are in `configs/model_config.yaml`.
+The model is trained for the 9 classes listed in `data.yaml`.
 
-### Key settings you may want to change
+The dataset contains indoor and outdoor images, including different object distances, camera angles, and lighting conditions. The final project report mentions around 60,000 images used during development.
 
-```yaml
-# Detection confidence (higher = fewer but more accurate detections)
-detection:
-  confidence: 0.45
-  iou: 0.45
+The raw dataset is not included in this repository. This repository includes the trained model output and the runtime code needed to test the system.
 
-# Raspberry Pi optimization
-detection:
-  input_size_pi: 320    # Lower = faster, Higher = more accurate
-  frame_skip: 2          # Process every 2nd frame on Pi
+Training output included in this repository:
 
-# Speech settings
-audio:
-  rate: 180              # Words per minute
-  volume: 0.9            # 0.0 to 1.0
-
-# Camera settings
-camera:
-  resolution_width: 640
-  resolution_height: 480
-  fps: 20
+```text
+runs/detect/smart_glass/
+├── args.yaml
+├── labels.jpg
+├── results.csv
+└── weights/
+    ├── best.pt
+    └── last.pt
 ```
+
+---
+
+## Performance and Results
+
+The system was tested on Raspberry Pi 4 with limited hardware resources.
+
+Main observed results:
+
+- Around 5 FPS on Raspberry Pi 4.
+- Real-time detection is possible with frame skipping and smaller input size.
+- Larger objects such as cars and doors were easier to detect.
+- Traffic lights were more difficult because they are small, affected by distance, lighting, and color variation.
+- The audio cooldown system improved usability by reducing repeated alerts.
+
+Main optimizations used:
+
+- YOLOv8n lightweight model.
+- Raspberry Pi mode with smaller prediction image size.
+- Frame skipping.
+- Camera resolution reduction.
+- Temporal filtering.
+- Class-based alert cooldowns.
+
+---
+
+## Known Limitations
+
+- Raspberry Pi 4 with 1GB RAM limits speed and model size.
+- Poor lighting can reduce detection accuracy.
+- Traffic lights can be hard to detect from far distances.
+- Crosswalk detection can be affected by faded road lines and camera angle.
+- The system estimates distance from bounding box size, not from a real depth sensor.
+- Audio quality depends on the speaker and operating system voice support.
 
 ---
 
 ## Troubleshooting
 
-### Training Issues
+### Model not found
 
-| Problem | Solution |
-|---------|----------|
-| "Dataset not found" | First put your data in `datasets/raw/` then run `python prepare_dataset.py` |
-| "No labels found for image" | Each image needs a `.txt` file with the same name |
-| CUDA out of memory | Reduce batch size: `python train.py --batch 8` |
-| Training too slow | Use GPU, reduce epochs, or use smaller image size |
+Make sure this file exists:
 
-### Detection Issues
+```text
+runs/detect/smart_glass/weights/best.pt
+```
 
-| Problem | Solution |
-|---------|----------|
-| Model not found | Train first: `python train.py` or use `--model yolov8n.pt` |
-| Camera not opening | Check camera connection, try different source number |
-| No detections | Lower confidence: edit `configs/model_config.yaml` |
-| Too many false positives | Increase confidence threshold above 0.45 |
-| Alerts too frequent | Increase cooldowns in `configs/model_config.yaml` |
+Or pass the model path manually:
 
-### Raspberry Pi Issues
+```bash
+python3 src/detect.py --model runs/detect/smart_glass/weights/best.pt --language en
+```
 
-| Problem | Solution |
-|---------|----------|
-| "pyttsx3 not installed" | `pip install pyttsx3` and `sudo apt install espeak` |
-| "onnxruntime not found" | `pip install onnxruntime` |
-| Camera not found | Try `--source /dev/video0` or `--source /dev/video2` |
-| Detection too slow | Reduce `--input-size` to 224 or increase `--frame-skip` to 3 |
-| Audio not working | `sudo apt install espeak espeak-ng` |
+### Camera not opening
+
+Try a different camera source:
+
+```bash
+python3 src/detect.py --source 0 --language en
+python3 src/detect.py --source 1 --language en
+python3 src/detect.py --source 2 --language en
+```
+
+On Raspberry Pi, check connected cameras:
+
+```bash
+libcamera-hello --list-cameras
+v4l2-ctl --list-devices
+```
+
+Install Raspberry Pi camera packages:
+
+```bash
+sudo apt install python3-libcamera python3-picamera2 v4l-utils
+```
+
+### Audio not working
+
+Install speech packages:
+
+```bash
+sudo apt install espeak espeak-ng
+pip install pyttsx3
+```
+
+Test speaker output from the operating system first. If the system has no audio output device, the Python script cannot speak alerts.
+
+### Detection is slow
+
+Use Raspberry Pi mode:
+
+```bash
+python3 src/detect.py --device pi --language en
+```
+
+Run without display:
+
+```bash
+python3 src/detect.py --device pi --no-display --language en
+```
+
+You can also reduce the input size in the code or use a lighter export format such as ONNX.
+
+### Too many or too few detections
+
+Change the confidence threshold:
+
+```bash
+python3 src/detect.py --conf 0.35 --language en
+```
+
+Lower confidence can show more detections but may increase false positives. Higher confidence can reduce false positives but may miss some objects.
 
 ---
 
-## Recommended Dataset Size
+## Educational Use
 
-For a good model, aim for:
-
-| Class | Minimum Images | Recommended |
-|-------|---------------|-------------|
-| traffic_light_red | 200 | 500+ |
-| traffic_light_yellow | 200 | 500+ |
-| traffic_light_green | 200 | 500+ |
-| crosswalk | 200 | 500+ |
-| door | 200 | 500+ |
-| person | 300 | 1000+ |
-| car | 300 | 1000+ |
-| stairs | 200 | 500+ |
-| obstacle | 200 | 500+ |
-
-**Total recommended: 5000+ images**
-
-Use tools like Roboflow, Label Studio, or CVAT for labeling.
-
----
-
-## License
-
-This project is for educational and research purposes as part of the Capstone Project at the University of Jordan.
+This project was developed for academic and research purposes as part of a Bachelor of Computer Science capstone project.
