@@ -1,0 +1,130 @@
+# Smart Glasses AI - Model & Detection Configuration
+
+# ============================================================
+# MODEL SETTINGS
+# ============================================================
+model:
+  # YOLOv8n (nano) — best for Raspberry Pi
+  variant: "yolov8n"
+  pretrained: "yolov8n.pt"          # Starting weights (downloaded automatically)
+  input_size: 640                    # Training input size (pixels)
+  # Note: On Raspberry Pi, we will resize to 320 for speed
+
+# ============================================================
+# TRAINING SETTINGS
+# ============================================================
+training:
+  epochs: 200                        # Number of training epochs
+  imgsz: 640                         # Image size for training
+  batch: 16                          # Batch size (reduce to 8 if GPU memory is low)
+  patience: 30                       # Early stopping patience
+  device: 0                          # GPU device (0 for CUDA, 'cpu' for CPU)
+  workers: 8                         # Data loading workers
+  optimizer: "AdamW"                 # Optimizer: SGD, Adam, AdamW
+  lr0: 0.001                         # Initial learning rate
+  lrf: 0.01                          # Final learning rate (lr0 * lrf)
+  momentum: 0.937                    # SGD momentum / Adam beta1
+  weight_decay: 0.0005               # Weight decay
+  warmup_epochs: 5                   # Warmup epochs
+  warmup_momentum: 0.8               # Warmup initial momentum
+  warmup_bias_lr: 0.1                # Warmup initial bias lr
+  box: 7.5                           # Box loss gain
+  cls: 0.5                           # Classification loss gain
+  dfl: 1.5                           # Distribution focal loss gain
+  mosaic: 1.0                        # Mosaic augmentation (0.0 - 1.0)
+  mixup: 0.1                         # Mixup augmentation (0.0 - 1.0)
+  hsv_h: 0.015                       # Hue augmentation
+  hsv_s: 0.7                         # Saturation augmentation
+  hsv_v: 0.4                         # Value/brightness augmentation
+  degrees: 10.0                      # Rotation augmentation (+/- degrees)
+  translate: 0.1                     # Translation augmentation (+/- fraction)
+  scale: 0.5                         # Scale augmentation (gain)
+  shear: 2.0                         # Shear augmentation (+/- degrees)
+  flipud: 0.0                        # Vertical flip probability
+  fliplr: 0.5                        # Horizontal flip probability
+  close_mosaic: 10                   # Disable mosaic in last N epochs
+  save: true                         # Save checkpoints
+  save_period: -1                    # Save every N epochs (-1 = disabled)
+  cache: false                       # Cache images (true/false/'ram'/'disk')
+  amp: true                          # Automatic Mixed Precision
+  verbose: true                      # Verbose output
+
+# ============================================================
+# DETECTION SETTINGS (Real-time on Raspberry Pi)
+# ============================================================
+detection:
+  confidence: 0.45                   # Confidence threshold
+  iou: 0.45                          # NMS IoU threshold
+  max_detections: 10                 # Maximum detections per frame
+  input_size_pi: 320                 # Input size on Raspberry Pi (speed optimization)
+  frame_skip: 2                      # Process every Nth frame on Raspberry Pi
+  half: true                         # Use FP16 (half precision) on Pi
+  agnostic_nms: false                # Class-agnostic NMS
+
+# ============================================================
+# PRIORITY SYSTEM
+# ============================================================
+priority:
+  # Priority levels: critical, high, medium, low
+  # Lower number = higher priority (spoken first)
+  class_priorities:
+    traffic_light_red: 1             # CRITICAL — immediate danger
+    traffic_light_yellow: 2          # HIGH — caution
+    car: 2                            # HIGH — moving danger
+    stairs: 2                         # HIGH — fall risk
+    crosswalk: 3                      # MEDIUM — navigation aid
+    person: 3                         # MEDIUM — awareness
+    door: 3                           # MEDIUM — navigation aid
+    obstacle: 4                       # LOW — general awareness
+    traffic_light_green: 5            # LOW — safe to go
+
+  # Cooldown per class (seconds) — prevents spam
+  # Lower priority = longer cooldown
+  cooldowns:
+    traffic_light_red: 3.0
+    traffic_light_yellow: 4.0
+    traffic_light_green: 6.0
+    car: 3.0
+    stairs: 3.0
+    crosswalk: 5.0
+    person: 4.0
+    door: 5.0
+    obstacle: 6.0
+
+  # Global settings
+  min_time_between_alerts: 2.0       # Minimum seconds between ANY two alerts
+  max_alerts_per_minute: 12          # Maximum alerts per minute (anti-spam)
+  same_object_cooldown: 4.0          # Cooldown for same object type in same area
+
+# ============================================================
+# DISTANCE ZONES (estimated from bounding box size)
+# ============================================================
+distance:
+  # Distance zones based on relative bounding box area
+  # (bbox_area / image_area) * 100
+  close_threshold: 3.0               # >3% = close (immediate warning)
+  medium_threshold: 1.0              # >1% = medium
+  # <1% = far (lower priority, less frequent alerts)
+
+  close_distance_label: "very close"
+  medium_distance_label: "ahead"
+
+# ============================================================
+# AUDIO SETTINGS
+# ============================================================
+audio:
+  rate: 180                          # Speech rate (words per minute)
+  volume: 0.9                        # Volume (0.0 - 1.0)
+  voice_id: null                     # Leave null for system default
+  language: "en"                     # Language for alerts ("en" or "ar")
+
+# ============================================================
+# CAMERA SETTINGS
+# ============================================================
+camera:
+  resolution_width: 640
+  resolution_height: 480
+  fps: 20
+  buffer_size: 2                     # Keep buffer small for low latency
+  # Raspberry Pi camera module
+  use_picamera: false                 # Set true on Raspberry Pi with camera module

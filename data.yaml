@@ -1,0 +1,23 @@
+# Smart Glasses AI - Dataset Configuration
+# Place this file at the root of your project, next to train.py
+
+path: datasets/processed  # Root path to your dataset (relative to project root)
+
+train: train/images  # Training images (relative to path)
+val: val/images      # Validation images (relative to path)
+test: test/images    # Test images (relative to path)
+
+# Number of classes
+nc: 9
+
+# Class names — DO NOT change the order
+names:
+  0: traffic_light_red
+  1: traffic_light_yellow
+  2: traffic_light_green
+  3: crosswalk
+  4: door
+  5: person
+  6: car
+  7: stairs
+  8: obstacle

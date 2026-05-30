@@ -1,0 +1,30 @@
+# ═══════════════════════════════════════════════════════════════
+# Smart Glasses AI — Raspberry Pi Requirements
+# ═══════════════════════════════════════════════════════════════
+# Install on Pi:
+#   pip3 install -r requirements-pi.txt
+#
+# IMPORTANT: Also run the system setup:
+#   bash install_pi.sh
+# ═══════════════════════════════════════════════════════════════
+
+# Core ML framework (CPU-only for ARM)
+torch>=2.0.0
+torchvision>=0.15.0
+
+# YOLO model
+ultralytics>=8.1.0
+
+# Image processing (headless = no GUI dependencies)
+opencv-python-headless>=4.8.0
+
+# Numerics
+numpy>=1.24.0
+pyyaml>=6.0
+
+# Offline TTS — uses espeak on Raspberry Pi
+pyttsx3>=2.90
+
+# ONNX runtime (ARM-optimised inference)
+onnx>=1.14.0
+onnxruntime>=1.15.0
