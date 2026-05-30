@@ -547,4 +547,4 @@ Lower confidence can show more detections but may increase false positives. High
 
 ## Educational Use
 
-This project was developed for academic and research purposes as part of a Bachelor of Computer Science capstone project.
+This project was developed for academic and research purposes for Al-Hussein Technical University.
